@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "MultiParking (demo)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "--dart-define=APP_MODE=demo"
+      ]
+    },
+    {
+      "name": "MultiParking (production)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "args": [
+        "--dart-define=APP_MODE=production",
+        "--dart-define=API_BASE_URL=http://192.168.1.6:8000/v1",
+        "--dart-define=ENABLE_FIREBASE=true"
+      ]
+    }
+  ]
+}
