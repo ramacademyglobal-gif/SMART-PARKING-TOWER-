@@ -11,3 +11,11 @@
 -keepclasseswithmembers class * {
   public void onPayment*(...);
 }
+
+# CameraX + ML Kit + mobile_scanner — R8 strips these via reflection otherwise,
+# causing a null-pointer crash ("getClass() on a null object") in release builds.
+-keep class androidx.camera.** { *; }
+-dontwarn androidx.camera.**
+-keep class com.google.mlkit.** { *; }
+-dontwarn com.google.mlkit.**
+-keep class dev.steenbakker.mobile_scanner.** { *; }

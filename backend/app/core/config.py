@@ -128,7 +128,7 @@ class Settings(BaseSettings):
     otp_max_per_hour: int = 5
 
     # Firebase Phone Auth — project id from google-services.json / Console.
-    firebase_project_id: str = "pms-otp-26bd9"
+    firebase_project_id: str = "multiparking-tower"
 
     razorpay_key_id: str = ""
     razorpay_key_secret: str = ""

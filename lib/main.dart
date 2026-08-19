@@ -15,14 +15,22 @@ Future<void> main() async {
 
   final config = AppConfig.fromEnvironment();
 
-  // Firebase is optional (FCM later). Member OTP uses MSG91 via the API.
-  if (config.enableFirebase) {
+  // Production member OTP uses Firebase Phone Auth. Demo stays offline.
+  final shouldInitFirebase = config.isProduction || config.enableFirebase;
+  if (shouldInitFirebase) {
     try {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
-    } catch (error) {
-      debugPrint('Firebase initialization failed: $error');
+    } catch (error, stackTrace) {
+      debugPrint('Firebase initialization failed: $error\n$stackTrace');
+      if (config.isProduction) {
+        throw StateError(
+          'Firebase failed to start. Confirm android/app/google-services.json '
+          'and lib/firebase_options.dart exist for project multiparking-tower '
+          '(package com.multiparking.multiparking_tower). Original error: $error',
+        );
+      }
     }
   }
 

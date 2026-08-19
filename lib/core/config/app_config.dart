@@ -56,7 +56,7 @@ class AppConfig {
     );
     const enableFirebase = bool.fromEnvironment(
       'ENABLE_FIREBASE',
-      defaultValue: false,
+      defaultValue: true,
     );
 
     // Strip accidental trailing "." / "/" from dart-define typos (e.g. `/v1.`).

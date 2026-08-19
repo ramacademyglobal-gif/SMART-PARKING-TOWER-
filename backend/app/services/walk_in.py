@@ -217,16 +217,14 @@ async def to_session_out(db: AsyncSession, session: ParkingHistory) -> StaffSess
         owner = await db.get(User, session.user_id)
 
     duration = session.duration_seconds
-    if duration is None and session.status == "parked":
-        duration = int((utcnow() - as_utc(session.entry_at)).total_seconds())
+    entry = session.entry_at
+    if duration is None and session.status == "parked" and entry is not None:
+        duration = int((utcnow() - as_utc(entry)).total_seconds())
 
-    # Always emit floor + slot_label from the same bay (live slot if linked).
-    tower, floor, zone, slot_number = (
-        session.tower,
-        session.floor,
-        session.zone,
-        session.slot_number,
-    )
+    tower = session.tower or "A"
+    floor = session.floor or 1
+    zone = session.zone or "?"
+    slot_number = session.slot_number or "?"
     if session.parking_slot_id:
         live = await db.get(ParkingSlot, session.parking_slot_id)
         if live is not None:
@@ -236,24 +234,24 @@ async def to_session_out(db: AsyncSession, session: ParkingHistory) -> StaffSess
     amount = session.amount_in_paise
     return StaffSessionOut(
         id=session.id,
-        vehicle_number=session.vehicle_number,
+        vehicle_number=session.vehicle_number or "UNKNOWN",
         driver_name=session.driver_name,
         contact_phone=session.contact_phone,
         user_name=owner.display_name if owner else session.driver_name,
         user_phone=(owner.phone if owner else session.contact_phone),
-        is_walk_in=session.is_walk_in,
+        is_walk_in=bool(session.is_walk_in),
         slot_label=label,
         tower=tower,
         floor=floor,
         zone=zone,
         slot_number=slot_number,
-        entry_at=session.entry_at,
+        entry_at=entry or utcnow(),
         exit_at=session.exit_at,
         duration_seconds=duration,
         duration_label=format_duration(duration) if duration is not None else None,
-        status=session.status,
-        billing_type=session.billing_type,
-        payment_status=session.payment_status,
+        status=session.status or "parked",
+        billing_type=session.billing_type or "hourly",
+        payment_status=session.payment_status or "free",
         amount_in_paise=amount,
         amount_rupees=(amount / 100.0) if amount is not None else None,
         hourly_rate_rupees=settings.hourly_rate_paise / 100.0,

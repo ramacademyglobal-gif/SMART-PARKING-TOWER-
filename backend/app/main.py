@@ -21,8 +21,9 @@ def _log_production_warnings(settings) -> None:
         return
     if settings.otp_dev_mode:
         logger.warning(
-            "APP_ENV=production but OTP_DEV_MODE=true — SMS is skipped and OTP 123456 "
-            "is accepted. Set OTP_DEV_MODE=false and fill MSG91_* for live member login."
+            "APP_ENV=production but OTP_DEV_MODE=true — legacy /auth/send-otp accepts "
+            "OTP 123456. Member login uses Firebase Phone Auth (POST /auth/firebase), "
+            "not MSG91. OTP_DEV_MODE does not affect Firebase member login."
         )
     if not settings.razorpay_enabled:
         logger.warning(

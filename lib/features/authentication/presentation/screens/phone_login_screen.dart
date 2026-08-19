@@ -9,7 +9,7 @@ import 'package:multiparking_tower/core/widgets/app_text_field.dart';
 import 'package:multiparking_tower/core/widgets/gradient_background.dart';
 import 'package:multiparking_tower/core/widgets/premium_button.dart';
 import 'package:multiparking_tower/providers/auth_provider.dart';
-import 'package:multiparking_tower/providers/public_config_provider.dart';
+import 'package:multiparking_tower/repositories/repository_providers.dart';
 import 'package:multiparking_tower/routes/app_routes.dart';
 
 class PhoneLoginScreen extends ConsumerStatefulWidget {
@@ -41,9 +41,7 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     final isLoading = auth.status == AuthStatus.loading;
-    final cfg = ref.watch(publicApiConfigProvider).valueOrNull;
-    final otpHint = (cfg == null || cfg.otpDevMode) &&
-            (cfg == null || !cfg.msg91Enabled);
+    final isDemo = ref.watch(appConfigProvider).isDemo;
 
     return GradientBackground(
       useScaffold: true,
@@ -80,9 +78,9 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      otpHint
-                          ? 'Enter your mobile number. We will send an OTP to sign in.'
-                          : 'Enter your mobile number. We will send an SMS OTP to sign in.',
+                      isDemo
+                          ? 'Enter your mobile number. Demo OTP is 123456.'
+                          : 'Enter your mobile number. We will send a Firebase OTP to sign in.',
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             color: AppColors.textMutedDark,
                             height: 1.5,

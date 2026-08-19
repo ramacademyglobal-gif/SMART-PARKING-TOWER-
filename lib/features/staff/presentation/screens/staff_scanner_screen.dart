@@ -26,6 +26,9 @@ class _StaffScannerScreenState extends ConsumerState<StaffScannerScreen>
   PermissionStatus _permission = PermissionStatus.denied;
   bool _handling = false;
   bool _torchOn = false;
+  bool _scannerRunning = false;
+  bool _bootstrapping = false;
+  String? _cameraError;
   final _manualController = TextEditingController();
 
   @override
@@ -36,34 +39,102 @@ class _StaffScannerScreenState extends ConsumerState<StaffScannerScreen>
   }
 
   Future<void> _bootstrap() async {
-    final status = await Permission.camera.request();
-    if (!mounted) return;
-    setState(() => _permission = status);
-    if (status.isGranted || status.isLimited) {
-      _controller = MobileScannerController(
-        detectionSpeed: DetectionSpeed.normal,
-        facing: CameraFacing.back,
-      );
-      setState(() {});
+    if (_bootstrapping) return;
+    _bootstrapping = true;
+    try {
+      await _disposeController();
+      final status = await Permission.camera.request();
+      if (!mounted) return;
+      setState(() {
+        _permission = status;
+        _cameraError = null;
+        _torchOn = false;
+      });
+      if (status.isGranted || status.isLimited) {
+        final ctrl = MobileScannerController(
+          autoStart: false,
+          detectionSpeed: DetectionSpeed.normal,
+        );
+        if (!mounted) {
+          ctrl.dispose();
+          return;
+        }
+        setState(() => _controller = ctrl);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _startScanner(ctrl);
+        });
+      }
+    } catch (error) {
+      debugPrint('Camera bootstrap failed: $error');
+      if (!mounted) return;
+      setState(() => _cameraError = error.toString());
+    } finally {
+      _bootstrapping = false;
+    }
+  }
+
+  Future<void> _disposeController() async {
+    final controller = _controller;
+    _controller = null;
+    _scannerRunning = false;
+    if (controller == null) return;
+    try {
+      await controller.dispose();
+    } catch (error) {
+      debugPrint('Camera dispose failed: $error');
+    }
+  }
+
+  Future<void> _startScanner([MobileScannerController? expected]) async {
+    final controller = expected ?? _controller;
+    if (!mounted || controller == null) return;
+    if (!(_permission.isGranted || _permission.isLimited)) return;
+    if (!identical(controller, _controller)) return;
+    if (_scannerRunning) return;
+    try {
+      await controller.start();
+      if (!mounted || !identical(controller, _controller)) return;
+      setState(() {
+        _scannerRunning = true;
+        _cameraError = null;
+      });
+    } catch (error) {
+      debugPrint('Camera start failed: $error');
+      if (!mounted || !identical(controller, _controller)) return;
+      setState(() => _cameraError = error.toString());
+    }
+  }
+
+  Future<void> _stopScanner() async {
+    final controller = _controller;
+    if (controller == null || !_scannerRunning) return;
+    try {
+      await controller.stop();
+    } catch (error) {
+      debugPrint('Camera stop failed: $error');
+    } finally {
+      _scannerRunning = false;
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final controller = _controller;
-    if (controller == null || !_permission.isGranted) return;
+    if (controller == null || !(_permission.isGranted || _permission.isLimited)) {
+      return;
+    }
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
-      controller.stop();
+      _stopScanner();
     } else if (state == AppLifecycleState.resumed) {
-      controller.start();
+      _startScanner(controller);
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _controller?.dispose();
+    _disposeController();
     _manualController.dispose();
     super.dispose();
   }
@@ -81,7 +152,7 @@ class _StaffScannerScreenState extends ConsumerState<StaffScannerScreen>
   Future<void> _processToken(String token) async {
     if (_handling) return;
     _handling = true;
-    await _controller?.stop();
+    await _stopScanner();
     if (!mounted) return;
 
     try {
@@ -101,7 +172,7 @@ class _StaffScannerScreenState extends ConsumerState<StaffScannerScreen>
         ),
       );
     } finally {
-      if (mounted) await _controller?.start();
+      if (mounted) await _startScanner();
       _handling = false;
     }
   }
@@ -137,6 +208,50 @@ class _StaffScannerScreenState extends ConsumerState<StaffScannerScreen>
         defaultTargetPlatform == TargetPlatform.windows ||
         defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.linux;
+
+    if (_cameraError != null) {
+      return Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline_rounded,
+                size: 64, color: AppColors.error),
+            const SizedBox(height: 18),
+            Text(
+              'Camera failed to start',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: AppColors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              _cameraError!,
+              textAlign: TextAlign.center,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: AppColors.textMutedDark),
+            ),
+            const SizedBox(height: 18),
+            PremiumButton(
+              label: 'RETRY CAMERA',
+              onPressed: _bootstrap,
+            ),
+            if (showManual) ...[
+              const SizedBox(height: 16),
+              _ManualTokenField(
+                controller: _manualController,
+                onSubmit: _processToken,
+                enabled: !_handling,
+              ),
+            ],
+          ],
+        ),
+      );
+    }
 
     if (!_permission.isGranted && !_permission.isLimited) {
       return Padding(
@@ -183,7 +298,33 @@ class _StaffScannerScreenState extends ConsumerState<StaffScannerScreen>
     return Stack(
       fit: StackFit.expand,
       children: [
-        MobileScanner(controller: controller, onDetect: _onDetect),
+        MobileScanner(
+          controller: controller,
+          onDetect: _onDetect,
+          errorBuilder: (context, error, child) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.videocam_off_rounded,
+                        size: 56, color: AppColors.error),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Camera error: ${error.errorDetails?.message ?? error.errorCode.name}',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: AppColors.white),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
         Positioned(
           left: 24,
           right: 24,

@@ -3,7 +3,7 @@
 FastAPI backend for the MultiParking Tower Flutter app.
 
 - PostgreSQL via `DATABASE_URL` (Supabase or local)
-- **MSG91 SMS OTP** (primary member auth path)
+- **Firebase Phone Auth** (primary member login: `POST /v1/auth/firebase`)
 - JWT access/refresh tokens
 - Razorpay order create + server-side verification + webhook
 - Automatic slot allocation + opaque Fernet QR tokens
@@ -47,7 +47,7 @@ Open Swagger: http://localhost:8000/docs
 
 Bind `--host 0.0.0.0` so a phone on the same LAN can reach the API (use the PC’s LAN IP in Flutter `API_BASE_URL`).
 
-With `OTP_DEV_MODE=true`, use OTP `123456` for any valid Indian mobile. Live SMS requires MSG91 keys + `OTP_DEV_MODE=false`.
+Member login in the Flutter app uses **Firebase Phone Auth** (`POST /v1/auth/firebase`). The legacy `/auth/send-otp` path still accepts OTP `123456` when `OTP_DEV_MODE=true`.
 
 ## Staff console
 
@@ -126,8 +126,7 @@ Health check: `GET /health` (port 8000, or the platform `PORT`).
 | `JWT_SECRET` | long random string |
 | `QR_SECRET` | long random string (32+ chars) |
 | `GATE_API_KEY` | random; used by hardware scanners |
-| `OTP_DEV_MODE` | `false` |
-| `MSG91_AUTH_KEY` / `MSG91_TEMPLATE_ID` / `MSG91_SENDER_ID` | live SMS |
+| `FIREBASE_PROJECT_ID` | `multiparking-tower` (must match the Android Firebase project) |
 | `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` / `RAZORPAY_WEBHOOK_SECRET` | test or live keys |
 | `STAFF_PASSWORD` / `ADMIN_PASSWORD` | not the local defaults |
 
@@ -135,18 +134,17 @@ If `APP_ENV=production` still has `OTP_DEV_MODE=true` or empty Razorpay keys, th
 
 Point Flutter at `https://YOUR-SERVICE.onrender.com/v1` (note `/v1`). Webhook URL: `https://YOUR-SERVICE.onrender.com/v1/payments/razorpay/webhook`.
 
-## MSG91 (primary member OTP)
+## Firebase Phone Auth (primary member OTP)
 
-Set in `.env`:
+Flutter production uses `FirebaseAuthRepository` → Firebase SMS → `POST /v1/auth/firebase`. MSG91 is unused for member login.
 
-- `MSG91_AUTH_KEY`
-- `MSG91_TEMPLATE_ID` (OTP / SendOTP template with OTP variable)
-- `MSG91_SENDER_ID`
-- `OTP_DEV_MODE=false`
+Set in `.env` (or rely on the code default):
 
-Failures from MSG91 return a clear API error. Check server logs for the MSG91 response body.
+```
+FIREBASE_PROJECT_ID=multiparking-tower
+```
 
-Flutter production uses `ApiAuthRepository` → these endpoints (not Firebase Phone Auth).
+The server verifies the Firebase ID token audience against this project id.
 
 ## Razorpay
 
@@ -200,17 +198,20 @@ python scripts/check_payment_flow.py  # full flow against a running local API
 # Phone on LAN
 flutter run -d <device> \
   --dart-define=APP_MODE=production \
-  --dart-define=API_BASE_URL=http://192.168.1.42:8000/v1
+  --dart-define=API_BASE_URL=http://192.168.1.42:8000/v1 \
+  --dart-define=ENABLE_FIREBASE=true
 
 # Emulator
 flutter run -d emulator-5554 \
   --dart-define=APP_MODE=production \
-  --dart-define=API_BASE_URL=http://10.0.2.2:8000/v1
+  --dart-define=API_BASE_URL=http://10.0.2.2:8000/v1 \
+  --dart-define=ENABLE_FIREBASE=true
 
 # APK
 flutter build apk --release \
   --dart-define=APP_MODE=production \
-  --dart-define=API_BASE_URL=https://your-api.example.com/v1
+  --dart-define=API_BASE_URL=https://multiparking-api.onrender.com/v1 \
+  --dart-define=ENABLE_FIREBASE=true
 ```
 
 ## Key endpoints (`/v1`)
@@ -218,8 +219,9 @@ flutter build apk --release \
 | Method | Path | Notes |
 |--------|------|-------|
 | GET | `/config` | Public bootstrap (OTP flags, slot counts, Razorpay key id) |
-| POST | `/auth/send-otp` | MSG91 / dev OTP |
-| POST | `/auth/verify-otp` | Returns JWT session |
+| POST | `/auth/firebase` | Exchange Firebase ID token → JWT (member login) |
+| POST | `/auth/send-otp` | Legacy MSG91 / dev OTP (not used by the Flutter app) |
+| POST | `/auth/verify-otp` | Legacy verify (not used by the Flutter app) |
 | POST | `/auth/staff/login` | Staff username/password |
 | POST | `/auth/refresh` | Rotate tokens |
 | GET | `/users/me` | Profile |

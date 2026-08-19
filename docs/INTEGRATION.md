@@ -4,7 +4,7 @@
 
 | Concern | Demo (`APP_MODE=demo`) | Production |
 |---------|------------------------|------------|
-| Auth | In-app OTP `123456` | FastAPI + **MSG91** SMS OTP → JWT (`ApiAuthRepository`) |
+| Auth | In-app OTP `123456` | Firebase Phone Auth → `POST /auth/firebase` → JWT (`FirebaseAuthRepository`) |
 | Payments | Simulated order + verify | Native Razorpay SDK + `POST /payments/verify` |
 | Slots / QR | In-memory (11×100 capacity totals) | FastAPI + Postgres · Tower A 1100 bays |
 | Notifications | Seeded list | API notifications (+ optional FCM later) |
@@ -30,28 +30,28 @@ Phone on LAN (replace IP):
 ```bash
 flutter run \
   --dart-define=APP_MODE=production \
-  --dart-define=API_BASE_URL=http://192.168.1.42:8000/v1
+  --dart-define=API_BASE_URL=http://192.168.1.42:8000/v1 \
+  --dart-define=ENABLE_FIREBASE=true
 ```
 
 ## Live OTP + Razorpay
 
-### 1. MSG91 (real SMS — primary member auth)
+### 1. Firebase Phone Auth (primary member login)
 
-1. Create an MSG91 account and an **OTP / SendOTP** template with an OTP variable (`otp` / `VAR1`).
-2. In `backend/.env` set:
+MSG91 is **unused** for member login. The app sends SMS via Firebase, then exchanges the ID token with FastAPI.
 
-```env
-MSG91_AUTH_KEY=your_auth_key
-MSG91_TEMPLATE_ID=your_template_id
-MSG91_SENDER_ID=MPARK
-OTP_DEV_MODE=false
+1. Firebase Console project **multiparking-tower**:
+   - Authentication → Sign-in method → enable **Phone**
+   - Project settings → Android app `com.multiparking.multiparking_tower` → add **SHA-1** (debug and/or release)
+2. Keep `android/app/google-services.json` in place (gitignored).
+3. Backend `.env` and Render env: `FIREBASE_PROJECT_ID=multiparking-tower` (must match the token audience).
+4. Run / build with:
+
+```bat
+flutter run --dart-define=APP_MODE=production --dart-define=API_BASE_URL=https://multiparking-api.onrender.com/v1 --dart-define=ENABLE_FIREBASE=true
 ```
 
-3. Restart uvicorn. `GET /v1/config` should show `otpDevMode: false` and `msg91Enabled: true`.
-4. App OTP screen hides the “use 123456” hint and expects the SMS code.
-5. With `OTP_DEV_MODE=true` (or empty MSG91 key), OTP is always `123456` and SMS is skipped.
-
-Firebase Phone Auth is **not** required for member login. `ENABLE_FIREBASE` remains optional for future FCM.
+Demo mode (`APP_MODE=demo`) still uses OTP `123456` and does not call Firebase.
 
 ### 2. Razorpay (test mode)
 

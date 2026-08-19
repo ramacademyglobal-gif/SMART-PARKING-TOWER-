@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
@@ -22,6 +23,8 @@ from app.schemas.common import (
 )
 from app.services.gate import process_gate_scan
 from app.services import walk_in as walk_in_service
+
+logger = logging.getLogger("multiparking.staff")
 
 router = APIRouter(prefix="/staff", tags=["staff"])
 
@@ -139,9 +142,25 @@ async def active_sessions(
     if normalized in {"parked", "completed"}:
         stmt = stmt.where(ParkingHistory.status == normalized)
     if floor is not None:
-        stmt = stmt.outerjoin(
-            ParkingSlot, ParkingHistory.parking_slot_id == ParkingSlot.id
-        ).where(func.coalesce(ParkingSlot.floor, ParkingHistory.floor) == floor)
+        # Use OR instead of outerjoin to avoid returning Row tuples instead
+        # of ParkingHistory entities (which broke db.scalars serialization).
+        slot_on_floor = (
+            select(ParkingSlot.id)
+            .where(
+                ParkingSlot.id == ParkingHistory.parking_slot_id,
+                ParkingSlot.floor == floor,
+            )
+            .correlate(ParkingHistory)
+            .exists()
+        )
+        stmt = stmt.where(
+            or_(
+                slot_on_floor,
+                # Fall back to the denormalized floor when no slot is linked.
+                ParkingHistory.parking_slot_id.is_(None)
+                & (ParkingHistory.floor == floor),
+            )
+        )
     if search:
         q = f"%{search.strip().upper()}%"
         stmt = stmt.where(
@@ -159,7 +178,14 @@ async def active_sessions(
     )
     stmt = stmt.order_by(order).limit(100)
     rows = list(await db.scalars(stmt))
-    return [await walk_in_service.to_session_out(db, row) for row in rows]
+
+    out: list[StaffSessionOut] = []
+    for row in rows:
+        try:
+            out.append(await walk_in_service.to_session_out(db, row))
+        except Exception:
+            logger.exception("to_session_out failed for history %s", row.id)
+    return out
 
 
 @router.get("/sessions/lookup", response_model=StaffSessionOut | None)

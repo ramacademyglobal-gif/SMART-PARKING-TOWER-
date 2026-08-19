@@ -16,6 +16,8 @@ services:
         value: "*"
       - key: OTP_DEV_MODE
         value: "false"
+      - key: FIREBASE_PROJECT_ID
+        value: multiparking-tower
       - key: DATABASE_URL
         sync: false
       - key: JWT_SECRET

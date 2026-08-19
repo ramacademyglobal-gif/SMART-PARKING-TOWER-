@@ -9,7 +9,7 @@ import 'package:multiparking_tower/core/utils/validators.dart';
 import 'package:multiparking_tower/core/widgets/gradient_background.dart';
 import 'package:multiparking_tower/core/widgets/premium_button.dart';
 import 'package:multiparking_tower/providers/auth_provider.dart';
-import 'package:multiparking_tower/providers/public_config_provider.dart';
+import 'package:multiparking_tower/repositories/repository_providers.dart';
 import 'package:multiparking_tower/routes/app_routes.dart';
 
 class OtpVerificationScreen extends ConsumerStatefulWidget {
@@ -277,14 +277,11 @@ class _OtpVerificationScreenState
                     alignment: Alignment.center,
                     child: Builder(
                       builder: (context) {
-                        final cfg =
-                            ref.watch(publicApiConfigProvider).valueOrNull;
-                        final showDevHint = cfg == null ||
-                            (cfg.otpDevMode && !cfg.msg91Enabled);
+                        final isDemo = ref.watch(appConfigProvider).isDemo;
                         return Text(
-                          showDevHint
+                          isDemo
                               ? 'Dev mode: use OTP 123456'
-                              : 'OTP sent via SMS',
+                              : 'OTP sent via Firebase SMS',
                           textAlign: TextAlign.center,
                           style: Theme.of(context)
                               .textTheme

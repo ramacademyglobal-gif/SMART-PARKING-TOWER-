@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:multiparking_tower/core/providers/core_providers.dart';
-import 'package:multiparking_tower/repositories/api/api_auth_repository.dart';
+import 'package:multiparking_tower/repositories/api/firebase_auth_repository.dart';
 import 'package:multiparking_tower/repositories/api/api_notification_repository.dart';
 import 'package:multiparking_tower/repositories/api/api_parking_repository.dart';
 import 'package:multiparking_tower/repositories/api/api_payment_repository.dart';
@@ -33,8 +33,9 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   if (config.isDemo) {
     return DemoAuthRepository();
   }
-  // Production member OTP: MSG91 via backend /auth/send-otp + /auth/verify-otp.
-  return ApiAuthRepository(ref.watch(dioClientProvider));
+  // Production member OTP: Firebase Phone Auth → POST /auth/firebase.
+  // Staff username/password still uses the parking API via this repository.
+  return FirebaseAuthRepository(ref.watch(dioClientProvider));
 });
 
 final vehicleRepositoryProvider = Provider<VehicleRepository>((ref) {

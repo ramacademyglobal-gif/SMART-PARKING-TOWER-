@@ -2,11 +2,12 @@
 
 Premium Flutter mobile app for an automated multi-level car parking tower.
 
-Users authenticate with phone OTP (MSG91 via FastAPI), optionally purchase Monthly or Annual subscriptions via Razorpay (or pay ₹50/hour on exit), register vehicles, receive automatic slot allocation, and access the tower with a secure opaque QR token.
+Users authenticate with phone OTP (**Firebase Phone Auth**), optionally purchase Monthly or Annual subscriptions via Razorpay (or pay ₹50/hour on exit), register vehicles, receive automatic slot allocation, and access the tower with a secure opaque QR token.
 
 ## Features
 
-- Phone OTP authentication via **MSG91** (backend `/auth/send-otp` · `/auth/verify-otp`); demo OTP supported
+- Phone OTP authentication via **Firebase Phone Auth** (app SDK → `POST /auth/firebase` → JWT); demo OTP `123456` supported
+- MSG91 is **not** used for member login (legacy `/auth/send-otp` remains on the API only)
 - Optional Monthly and Annual subscription plans with feature comparison
 - Pay-as-you-go hourly billing (₹50/hour) for users without a plan
 - Razorpay checkout with **backend payment verification only** (native Android SDK)
@@ -20,7 +21,7 @@ Users authenticate with phone OTP (MSG91 via FastAPI), optionally purchase Month
 
 ## Tech stack
 
-Flutter 3 / Dart 3 · Material 3 · Riverpod · GoRouter · Dio · Secure Storage · Shared Preferences · Razorpay · qr_flutter · mobile_scanner · **FastAPI + PostgreSQL + MSG91** (Firebase/FCM optional later)
+Flutter 3 / Dart 3 · Material 3 · Riverpod · GoRouter · Dio · Secure Storage · Shared Preferences · Firebase Auth (Phone OTP) · Razorpay · qr_flutter · mobile_scanner · **FastAPI + PostgreSQL**
 
 ## Tower inventory
 
@@ -43,13 +44,13 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 copy .env.example .env
-# Fill DATABASE_URL, JWT_SECRET, QR_SECRET, MSG91_*, RAZORPAY_* as needed
+# Fill DATABASE_URL, JWT_SECRET, QR_SECRET, FIREBASE_PROJECT_ID, RAZORPAY_* as needed
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 On startup, if the slot count ≠ 1100 the API reseeds inventory automatically (SQLite locally, or Supabase when `DATABASE_URL` is a real Postgres URI).
 
-With `OTP_DEV_MODE=true` (local default), OTP is `123456`. Hosted production: MSG91 keys + `OTP_DEV_MODE=false`.
+Demo app OTP is `123456`. Production member login uses **Firebase SMS**, not MSG91.
 
 ## Getting started
 
@@ -57,7 +58,7 @@ With `OTP_DEV_MODE=true` (local default), OTP is `123456`. Hosted production: MS
 
 - Flutter stable (`flutter doctor` should be clean)
 - Android Studio for device / APK builds
-- (Production) MSG91 account, Razorpay test/live keys, reachable FastAPI URL
+- (Production) Firebase project with Phone Auth, Razorpay test/live keys, reachable FastAPI URL
 
 ### Install & run (demo mode — offline)
 
@@ -80,14 +81,14 @@ Flutter talks only to FastAPI. FastAPI talks to Supabase. The phone never uses `
 ```bat
 cd c:\Users\THARUN\Downloads\Smart-Parking-Tower-main\Smart-Parking-Tower-main
 flutter pub get
-flutter run --dart-define=APP_MODE=production --dart-define=API_BASE_URL=https://YOUR-API.onrender.com/v1
+flutter run --dart-define=APP_MODE=production --dart-define=API_BASE_URL=https://multiparking-api.onrender.com/v1 --dart-define=ENABLE_FIREBASE=true
 ```
 
 ### Build a release APK (HTTPS only — not localhost / LAN)
 
 ```bat
 cd c:\Users\THARUN\Downloads\Smart-Parking-Tower-main\Smart-Parking-Tower-main
-flutter build apk --release --dart-define=APP_MODE=production --dart-define=API_BASE_URL=https://YOUR-API.onrender.com/v1
+flutter build apk --release --dart-define=APP_MODE=production --dart-define=API_BASE_URL=https://multiparking-api.onrender.com/v1 --dart-define=ENABLE_FIREBASE=true
 ```
 
 APK: `build\app\outputs\flutter-apk\app-release.apk`
@@ -112,7 +113,18 @@ flutter build apk --debug --dart-define=APP_MODE=production --dart-define=API_BA
 
 The Razorpay Key ID is served by the backend (create-order + `GET /v1/config`); `--dart-define=RAZORPAY_KEY_ID=...` is only an optional override. **Never** put the Razorpay secret in the app.
 
-For **live SMS OTP + Razorpay test checkout**, see [docs/INTEGRATION.md](docs/INTEGRATION.md#live-otp--razorpay).
+### Firebase Phone Auth (manual Console steps)
+
+Project: `multiparking-tower` · Android package: `com.multiparking.multiparking_tower`
+
+1. Firebase Console → **Authentication** → **Sign-in method** → enable **Phone**.
+2. **Project settings** → your Android app → add **SHA-1** (and SHA-256) of the keystore used to sign the APK.
+   - Debug: `cd android` then `.\gradlew signingReport`
+   - Release: the keystore that signs `app-release.apk` (currently debug signing unless you add a release keystore).
+3. Download `google-services.json` into `android/app/` if it is missing (gitignored).
+4. Backend `FIREBASE_PROJECT_ID=multiparking-tower` (default in code). Also set this on the **Render Dashboard** for `multiparking-api` — `render.yaml` does not update the live service by itself.
+
+For Razorpay test checkout, see [docs/INTEGRATION.md](docs/INTEGRATION.md#live-otp--razorpay).
 
 See [`.env.example`](.env.example) for dart-define flags. Backend secrets live in `backend/.env` (from `backend/.env.example`).
 
@@ -131,7 +143,7 @@ lib/
 Repositories switch automatically:
 
 - `APP_MODE=demo` → in-memory demo repositories
-- `APP_MODE=production` → Dio REST repositories (`ApiAuthRepository` → MSG91 OTP)
+- `APP_MODE=production` → Dio REST repositories (`FirebaseAuthRepository` → Firebase Phone Auth → `POST /auth/firebase`)
 
 ## Assumed backend API contract
 
@@ -140,8 +152,7 @@ Base URL: `{API_BASE_URL}`
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/config` | Public bootstrap (`otpDevMode`, `msg91Enabled`, slot counts, Razorpay key id) |
-| POST | `/auth/send-otp` | Send phone OTP (MSG91 / dev) |
-| POST | `/auth/verify-otp` | Verify OTP → JWT + user |
+| POST | `/auth/firebase` | Exchange Firebase ID token → JWT + user (member OTP) |
 | POST | `/auth/staff/login` | Staff username/password → JWT |
 | POST | `/auth/refresh` | Refresh access token |
 | GET | `/users/me` | Current user profile |
@@ -186,7 +197,8 @@ cd backend && pytest -q
 
 - Internet, camera, and notification permissions are declared in `AndroidManifest.xml`
 - Debug cleartext HTTP is allowed for LAN testing; **release APKs should target HTTPS**
-- Use a physical device or emulator for native Razorpay (not Chrome as the main path)
+- Use a physical device or emulator for native Razorpay and Firebase Phone OTP (not Chrome as the main path)
+- `google-services.json` must be present under `android/app/` for production builds
 
 ### iOS (requires macOS)
 

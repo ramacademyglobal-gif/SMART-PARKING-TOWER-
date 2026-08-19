@@ -1,4 +1,4 @@
-// File generated for Firebase project pms-otp-26bd9 (Android).
+// File generated for Firebase project multiparking-tower (Android).
 // ignore_for_file: type=lint
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
@@ -39,10 +39,10 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyAUH5BKHuXwB6xn_M5jLLp7qq8rDS7sXGI',
-    appId: '1:435077711107:android:219e11f6d99a516b19d536',
-    messagingSenderId: '435077711107',
-    projectId: 'pms-otp-26bd9',
-    storageBucket: 'pms-otp-26bd9.firebasestorage.app',
+    apiKey: 'AIzaSyDigV386oI_7DA-jDfWtX2SibypOJOSO4s',
+    appId: '1:306611870453:android:262e39dbf377aafccb43bc',
+    messagingSenderId: '306611870453',
+    projectId: 'multiparking-tower',
+    storageBucket: 'multiparking-tower.firebasestorage.app',
   );
 }
