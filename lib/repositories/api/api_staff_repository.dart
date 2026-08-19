@@ -129,7 +129,7 @@ class ApiStaffRepository implements StaffRepository {
     final data = e.response?.data;
     String message = e.message ?? 'Network request failed';
     if (data is Map) {
-      message = (data['message'] ?? data['error'] ?? message).toString();
+      message = (data['message'] ?? data['detail'] ?? data['error'] ?? message).toString();
     }
     return ServerException(message: message, statusCode: e.response?.statusCode);
   }

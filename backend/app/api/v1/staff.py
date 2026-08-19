@@ -107,7 +107,11 @@ async def staff_scan(
     db: AsyncSession = Depends(get_db),
 ) -> GateValidateOut:
     """Staff QR scanner: resolves entry vs exit and returns full pass details."""
-    return await process_gate_scan(db, token=body.token, action=body.action, staff_id=staff.id)
+    try:
+        return await process_gate_scan(db, token=body.token, action=body.action, staff_id=staff.id)
+    except Exception:
+        logger.exception("process_gate_scan crashed for token=%.20s…", body.token)
+        return GateValidateOut(valid=False, message="Server error processing scan. Please retry.")
 
 
 @router.get("/slots", response_model=list[ParkingSlotOut])
