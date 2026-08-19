@@ -17,7 +17,7 @@ from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.core.security import as_utc, new_id, utcnow
 from app.db.models import ParkingHistory, ParkingSlot, User
 from app.schemas.common import StaffSessionOut
-from app.services.allocation import get_active_subscription, slot_label
+from app.services.allocation import SUBSCRIBER_FLOORS, get_active_subscription, slot_label
 from app.services.billing import calculate_hourly_charge_paise, format_duration
 
 _PLATE_RE = re.compile(r"^[A-Z0-9]{4,12}$")
@@ -69,6 +69,7 @@ async def _claim_free_slot(db: AsyncSession) -> ParkingSlot:
     slot = await db.scalar(
         select(ParkingSlot)
         .where(
+            ParkingSlot.floor.not_in(SUBSCRIBER_FLOORS),
             ParkingSlot.is_premium.is_(False),
             ParkingSlot.is_occupied.is_(False),
             ParkingSlot.assigned_user_id.is_(None),
@@ -77,10 +78,11 @@ async def _claim_free_slot(db: AsyncSession) -> ParkingSlot:
         .limit(1)
     )
     if slot is None:
-        # Fall back to premium bays only when every standard bay is taken.
+        # Fall back to non-reserved premium bays only when every standard bay is taken.
         slot = await db.scalar(
             select(ParkingSlot)
             .where(
+                ParkingSlot.floor.not_in(SUBSCRIBER_FLOORS),
                 ParkingSlot.is_occupied.is_(False),
                 ParkingSlot.assigned_user_id.is_(None),
             )

@@ -19,9 +19,12 @@ from app.services.qr_crypto import open_qr_payload, token_hash
 
 
 async def _free_standard_slot(db: AsyncSession) -> ParkingSlot | None:
+    from app.services.allocation import SUBSCRIBER_FLOORS
+
     return await db.scalar(
         select(ParkingSlot)
         .where(
+            ParkingSlot.floor.not_in(SUBSCRIBER_FLOORS),
             ParkingSlot.is_premium.is_(False),
             ParkingSlot.is_occupied.is_(False),
             ParkingSlot.assigned_user_id.is_(None),
@@ -32,7 +35,7 @@ async def _free_standard_slot(db: AsyncSession) -> ParkingSlot | None:
 
 
 async def _free_premium_row_slot(db: AsyncSession) -> ParkingSlot | None:
-    """Prefer premium Zone A on floors 1–3, then any premium, then any free."""
+    """Prefer premium Zone A on floors 1–2, then any premium, then any free."""
     from app.services.allocation import SUBSCRIBER_FLOORS
 
     slot = await db.scalar(

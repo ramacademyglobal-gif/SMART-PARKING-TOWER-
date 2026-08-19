@@ -17,8 +17,8 @@ from app.db.models import (
 from app.services.qr_crypto import seal_qr_payload, token_hash
 
 
-# Prefer lower floors for subscribers (quicker entry/exit). Not a permanent bay.
-SUBSCRIBER_FLOORS = (1, 2, 3)
+# Floors 1–2 are reserved for premium/subscription traffic.
+SUBSCRIBER_FLOORS = (1, 2)
 
 
 async def get_active_subscription(db: AsyncSession, user_id: str) -> Subscription | None:
@@ -42,12 +42,17 @@ def has_active_plan(sub: Subscription | None) -> bool:
     return bool(sub and sub.plan_type in {"monthly", "annual"})
 
 
+def _non_reserved_floors():
+    return ParkingSlot.floor.not_in(SUBSCRIBER_FLOORS)
+
+
 async def allocate_slot_for_user(db: AsyncSession, user: User) -> ParkingSlot:
     """Allocate a slot for the current visit.
 
-    - Subscribers (monthly/annual): prefer premium Zone A on floors 1–3, then any
+    - Subscribers (monthly/annual): prefer premium Zone A on floors 1–2, then any
       premium bay tower-wide, then any free bay. Not permanent — freed on exit.
-    - Hourly: temporary standard bay; occupancy flips only on real gate entry.
+    - Hourly: temporary non-premium bay outside reserved floors; occupancy flips
+      only on real gate entry.
     """
     sub = await get_active_subscription(db, user.id)
 
@@ -61,7 +66,7 @@ async def allocate_slot_for_user(db: AsyncSession, user: User) -> ParkingSlot:
         return existing_assigned
 
     if has_active_plan(sub):
-        # 1) Premium on preferential floors 1–3
+        # 1) Premium on reserved subscriber floors 1–2
         slot = await db.scalar(
             select(ParkingSlot)
             .where(
@@ -122,6 +127,7 @@ async def allocate_slot_for_user(db: AsyncSession, user: User) -> ParkingSlot:
         slot = await db.scalar(
             select(ParkingSlot)
             .where(
+                _non_reserved_floors(),
                 ParkingSlot.is_premium.is_(False),
                 ParkingSlot.is_occupied.is_(False),
                 ParkingSlot.assigned_user_id.is_(None),
