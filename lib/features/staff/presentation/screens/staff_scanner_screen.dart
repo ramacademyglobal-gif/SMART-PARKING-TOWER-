@@ -453,7 +453,9 @@ class _StaffScanSheet extends StatelessWidget {
             result.amountRupees ?? (amountPaise / 100),
             decimals: false,
           )
-        : '₹0 · Covered by plan';
+        : ((result.bookingFeeCreditPaise ?? result.bookingFeePaise ?? 0) > 0
+            ? '₹0 · Covered by booking fee'
+            : '₹0 · Covered by plan');
 
     return SafeArea(
       child: Padding(
@@ -593,6 +595,41 @@ class _StaffScanSheet extends StatelessWidget {
                         fontWeight: FontWeight.w900,
                       ),
                     ),
+                    if ((result.grossAmountInPaise ?? 0) > 0 ||
+                        (result.bookingFeeCreditPaise ??
+                                result.bookingFeePaise ??
+                                0) >
+                            0) ...[
+                      const SizedBox(height: 8),
+                      if ((result.grossAmountInPaise ?? 0) > 0)
+                        Text(
+                          'Total · ${Formatters.currency((result.grossAmountInPaise ?? 0) / 100, decimals: false)}',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: AppColors.tealDeep,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      if ((result.bookingFeeCreditPaise ??
+                              result.bookingFeePaise ??
+                              0) >
+                          0)
+                        Text(
+                          'Booking fee credit · −${Formatters.currency((result.bookingFeeCreditPaise ?? result.bookingFeePaise ?? 0) / 100, decimals: false)}',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: AppColors.tealDeep,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      Text(
+                        amountPaise > 0
+                            ? 'Net due · $amountText'
+                            : 'Net due · ₹0 · Covered by booking fee',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: AppColors.tealDark,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
                     if (result.durationLabel != null) ...[
                       const SizedBox(height: 4),
                       Text(

@@ -32,6 +32,7 @@ class StaffHomeScreen extends ConsumerWidget {
     final overview = ref.watch(staffOverviewProvider);
     final sessions = ref.watch(staffParkedSessionsProvider);
     final theme = Theme.of(context);
+    final isAdmin = auth.user?.role == 'admin';
     final themeMode = ref.watch(themeModeProvider);
     final isDark = themeMode == ThemeMode.dark ||
         (themeMode == ThemeMode.system &&
@@ -40,7 +41,7 @@ class StaffHomeScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
-        title: const Text('Staff console'),
+        title: Text(isAdmin ? 'Admin Console' : 'Staff console'),
         actions: [
           IconButton(
             tooltip: isDark ? 'Light mode' : 'Dark mode',
@@ -100,15 +101,49 @@ class StaffHomeScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
           children: [
-            Text(
-              'Hi, ${auth.user?.displayName ?? 'Staff'}',
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Hi, ${auth.user?.displayName ?? 'Staff'}',
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                if (isAdmin)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.tealDeep,
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.tealDeep.withValues(alpha: 0.18),
+                          blurRadius: 14,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      'ADMIN',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 6),
             Text(
-              'Scan app QR passes or book a bay for walk-in drivers.',
+              isAdmin
+                  ? 'Monitor tower activity and management controls.'
+                  : 'Scan app QR passes or book a bay for walk-in drivers.',
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -134,6 +169,17 @@ class StaffHomeScreen extends ConsumerWidget {
               ),
               data: (data) => _OverviewGrid(data: data),
             ),
+            if (isAdmin) ...[
+              const SizedBox(height: 22),
+              Text(
+                'Admin tools',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const _AdminToolsSection(),
+            ],
             const SizedBox(height: 22),
             Row(
               children: [
@@ -207,6 +253,44 @@ class StaffHomeScreen extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AdminToolsSection extends StatelessWidget {
+  const _AdminToolsSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 1.2,
+      children: const [
+        _AdminToolCard(
+          title: 'Reports',
+          subtitle: 'Occupancy, collections, and tower trends',
+          icon: Icons.analytics_rounded,
+        ),
+        _AdminToolCard(
+          title: 'Staff Management',
+          subtitle: 'Review operator access and shift coverage',
+          icon: Icons.groups_rounded,
+        ),
+        _AdminToolCard(
+          title: 'Pricing Control',
+          subtitle: 'Preview rate and plan configuration changes',
+          icon: Icons.tune_rounded,
+        ),
+        _AdminToolCard(
+          title: 'System Settings',
+          subtitle: 'Tower alerts, policies, and system controls',
+          icon: Icons.settings_suggest_rounded,
+        ),
+      ],
     );
   }
 }
@@ -297,6 +381,74 @@ class _StatCard extends StatelessWidget {
             hint,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminToolCard extends StatelessWidget {
+  const _AdminToolCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return PremiumCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: AppColors.tealDeep.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.admin_panel_settings_rounded,
+              color: AppColors.tealDeep,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Icon(icon, size: 18, color: AppColors.tealDark),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.35,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            'Coming soon',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: AppColors.tealDeep,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],

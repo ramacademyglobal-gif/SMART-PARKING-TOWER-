@@ -191,7 +191,8 @@ class SlotAllocationController extends Notifier<SlotAllocationState> {
       final slot = await ref.read(parkingRepositoryProvider).allocateSlot();
       state = state.copyWith(completedSteps: 2, slot: slot);
 
-      final qrCode = await ref.read(qrRepositoryProvider).refreshQr();
+      final qrCode = await ref.read(qrRepositoryProvider).getCurrentQr() ??
+          await ref.read(qrRepositoryProvider).refreshQr();
       await Future<void>.delayed(_stepDwell);
 
       state = state.copyWith(

@@ -5,6 +5,7 @@ import 'package:multiparking_tower/core/services/dio_client.dart';
 import 'package:multiparking_tower/models/gate_scan_result.dart';
 import 'package:multiparking_tower/models/parking_history_model.dart';
 import 'package:multiparking_tower/models/parking_slot_model.dart';
+import 'package:multiparking_tower/models/qr_code_model.dart';
 import 'package:multiparking_tower/repositories/parking_repository.dart';
 
 class ApiParkingRepository implements ParkingRepository {
@@ -133,6 +134,45 @@ class ApiParkingRepository implements ParkingRepository {
       );
       _ensureOk(response);
       return ParkingHistoryModel.fromJson(_asMap(response.data));
+    } on DioException catch (e) {
+      throw _mapDio(e);
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> createBookingFeeOrder() async {
+    try {
+      final response = await _dio.post(ApiEndpoints.createBookingFeeOrder);
+      _ensureOk(response);
+      final map = _asMap(response.data);
+      return {
+        'orderId': map['orderId'] ?? map['order_id'],
+        'amount': map['amount'] ?? map['amountInPaise'] ?? map['amount_in_paise'],
+        'currency': map['currency'] ?? 'INR',
+        'key': map['key'] ?? map['razorpayKey'] ?? map['razorpay_key'],
+      };
+    } on DioException catch (e) {
+      throw _mapDio(e);
+    }
+  }
+
+  @override
+  Future<QrCodeModel> verifyBookingFeePayment({
+    required String orderId,
+    required String paymentId,
+    required String signature,
+  }) async {
+    try {
+      final response = await _dio.post(
+        ApiEndpoints.verifyBookingFeePayment,
+        data: {
+          'orderId': orderId,
+          'paymentId': paymentId,
+          'signature': signature,
+        },
+      );
+      _ensureOk(response);
+      return QrCodeModel.fromJson(_asMap(response.data));
     } on DioException catch (e) {
       throw _mapDio(e);
     }

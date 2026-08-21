@@ -11,13 +11,24 @@ import 'package:multiparking_tower/core/widgets/premium_button.dart';
 import 'package:multiparking_tower/core/widgets/premium_card.dart';
 import 'package:multiparking_tower/core/widgets/shell_back_button.dart';
 import 'package:multiparking_tower/core/widgets/tower_loading.dart';
+import 'package:multiparking_tower/features/parking/presentation/widgets/booking_fee_sheet.dart';
 import 'package:multiparking_tower/features/qr/presentation/providers/qr_provider.dart';
+import 'package:multiparking_tower/features/subscription/presentation/providers/subscription_provider.dart';
 import 'package:multiparking_tower/models/qr_code_model.dart';
 import 'package:multiparking_tower/models/subscription_plan_model.dart';
 import 'package:multiparking_tower/routes/app_routes.dart';
 
 class QrScreen extends ConsumerWidget {
   const QrScreen({super.key});
+
+  Future<void> _bookSlot(BuildContext context, WidgetRef ref) async {
+    final hasSub = ref.read(hasActiveSubscriptionProvider);
+    if (hasSub) {
+      await ref.read(qrControllerProvider.notifier).refreshQr();
+      return;
+    }
+    await showBookingFeeCheckout(context);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -68,8 +79,7 @@ class QrScreen extends ConsumerWidget {
                     'Your visit QR is no longer valid. Book a new slot when you '
                     'return to the tower.',
                 actionLabel: 'Book a slot',
-                onAction: () =>
-                    ref.read(qrControllerProvider.notifier).refreshQr(),
+                onAction: () => _bookSlot(context, ref),
               )
             else
               _QrPassCard(

@@ -12,8 +12,10 @@ import 'package:multiparking_tower/core/widgets/premium_card.dart';
 import 'package:multiparking_tower/core/widgets/tower_loading.dart';
 import 'package:multiparking_tower/features/notifications/presentation/providers/notification_provider.dart';
 import 'package:multiparking_tower/features/parking/presentation/providers/parking_provider.dart';
+import 'package:multiparking_tower/features/parking/presentation/widgets/booking_fee_sheet.dart';
 import 'package:multiparking_tower/features/parking/presentation/widgets/parking_exit_receipt.dart';
 import 'package:multiparking_tower/features/qr/presentation/providers/qr_provider.dart';
+import 'package:multiparking_tower/features/subscription/presentation/providers/subscription_provider.dart';
 import 'package:multiparking_tower/models/parking_history_model.dart';
 import 'package:multiparking_tower/models/parking_slot_model.dart';
 import 'package:multiparking_tower/models/qr_code_model.dart';
@@ -38,7 +40,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
     setState(() => _isBooking = true);
     try {
-      await ref.read(qrControllerProvider.notifier).refreshQr();
+      final hasSub = ref.read(hasActiveSubscriptionProvider);
+      if (hasSub) {
+        await ref.read(qrControllerProvider.notifier).refreshQr();
+      } else {
+        final issued = await showBookingFeeCheckout(context);
+        if (issued == null) return;
+      }
       if (mounted) context.go(AppRoutes.qr);
     } finally {
       if (mounted) setState(() => _isBooking = false);

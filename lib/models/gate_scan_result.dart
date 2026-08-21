@@ -28,6 +28,9 @@ class GateScanResult extends Equatable {
     this.zone,
     this.slotNumber,
     this.isWalkIn = false,
+    this.bookingFeePaise,
+    this.bookingFeeCreditPaise,
+    this.grossAmountInPaise,
   });
 
   final bool valid;
@@ -55,6 +58,9 @@ class GateScanResult extends Equatable {
   final String? zone;
   final String? slotNumber;
   final bool isWalkIn;
+  final int? bookingFeePaise;
+  final int? bookingFeeCreditPaise;
+  final int? grossAmountInPaise;
 
   bool get isEntry {
     final a = action?.toLowerCase().trim();
@@ -103,6 +109,9 @@ class GateScanResult extends Equatable {
           : ParkingHistoryStatus.parked,
       amountInPaise: amountInPaise,
       paymentStatus: paymentStatus ?? (isExit ? 'pending' : 'free'),
+      bookingFeePaise: bookingFeePaise ?? bookingFeeCreditPaise ?? 0,
+      bookingFeePaid: (bookingFeePaise ?? bookingFeeCreditPaise ?? 0) > 0,
+      grossAmountInPaise: grossAmountInPaise,
     );
   }
 
@@ -155,6 +164,13 @@ class GateScanResult extends Equatable {
       isWalkIn: json['isWalkIn'] as bool? ??
           json['is_walk_in'] as bool? ??
           false,
+      bookingFeePaise:
+          asInt(json['bookingFeePaise'] ?? json['booking_fee_paise']),
+      bookingFeeCreditPaise: asInt(
+        json['bookingFeeCreditPaise'] ?? json['booking_fee_credit_paise'],
+      ),
+      grossAmountInPaise:
+          asInt(json['grossAmountInPaise'] ?? json['gross_amount_in_paise']),
     );
   }
 

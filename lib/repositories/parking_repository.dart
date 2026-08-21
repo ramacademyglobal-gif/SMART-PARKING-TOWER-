@@ -1,6 +1,7 @@
 import 'package:multiparking_tower/models/gate_scan_result.dart';
 import 'package:multiparking_tower/models/parking_history_model.dart';
 import 'package:multiparking_tower/models/parking_slot_model.dart';
+import 'package:multiparking_tower/models/qr_code_model.dart';
 
 abstract class ParkingRepository {
   Future<ParkingSlotModel?> getCurrentSlot();
@@ -27,6 +28,16 @@ abstract class ParkingRepository {
   /// Verifies a parking payment and returns the settled (paid) session.
   Future<ParkingHistoryModel> verifyParkingPayment({
     required String historyId,
+    required String orderId,
+    required String paymentId,
+    required String signature,
+  });
+
+  /// Creates a Razorpay order for the non-refundable hourly booking fee.
+  Future<Map<String, dynamic>> createBookingFeeOrder();
+
+  /// Verifies booking-fee payment and returns the issued QR (slot allotted).
+  Future<QrCodeModel> verifyBookingFeePayment({
     required String orderId,
     required String paymentId,
     required String signature,

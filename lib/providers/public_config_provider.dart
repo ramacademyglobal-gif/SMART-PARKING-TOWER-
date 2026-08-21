@@ -18,6 +18,8 @@ class PublicApiConfig extends Equatable {
     this.premiumSlots = 220,
     this.standardSlots = 880,
     this.hourlyRateRupees = 50,
+    this.bookingFeeRupees = 50,
+    this.bookingFeePaise = 5000,
   });
 
   final bool otpDevMode;
@@ -32,6 +34,8 @@ class PublicApiConfig extends Equatable {
   final int premiumSlots;
   final int standardSlots;
   final double hourlyRateRupees;
+  final double bookingFeeRupees;
+  final int bookingFeePaise;
 
   /// Offline / demo fallback: always show the local OTP hint.
   static const PublicApiConfig demo = PublicApiConfig(
@@ -42,6 +46,8 @@ class PublicApiConfig extends Equatable {
     availableSlots: 1100,
     premiumSlots: 220,
     standardSlots: 880,
+    bookingFeeRupees: 50,
+    bookingFeePaise: 5000,
   );
 
   factory PublicApiConfig.fromJson(Map<String, dynamic> json) {
@@ -88,6 +94,14 @@ class PublicApiConfig extends Equatable {
         json['hourlyRateRupees'] ?? json['hourly_rate_rupees'],
         50,
       ),
+      bookingFeeRupees: asDouble(
+        json['bookingFeeRupees'] ?? json['booking_fee_rupees'],
+        50,
+      ),
+      bookingFeePaise: asInt(
+        json['bookingFeePaise'] ?? json['booking_fee_paise'],
+        5000,
+      ),
     );
   }
 
@@ -105,6 +119,8 @@ class PublicApiConfig extends Equatable {
         premiumSlots,
         standardSlots,
         hourlyRateRupees,
+        bookingFeeRupees,
+        bookingFeePaise,
       ];
 }
 

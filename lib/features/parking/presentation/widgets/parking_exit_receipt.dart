@@ -373,10 +373,33 @@ class _ExitReceiptSheetState extends ConsumerState<_ExitReceiptSheet> {
             value: Formatters.duration(duration),
           ),
           const Divider(height: 28),
+          if (_isHourly &&
+              _session.bookingFeePaid &&
+              _session.bookingFeePaise > 0) ...[
+            _ReceiptRow(
+              label: 'Parking charge',
+              value: Formatters.currency(
+                (_session.grossAmountInPaise ?? _amount) / 100,
+                decimals: false,
+              ),
+            ),
+            _ReceiptRow(
+              label: 'Booking fee credit',
+              value:
+                  '− ${Formatters.currency(_session.bookingFeeRupees, decimals: false)}',
+            ),
+            const SizedBox(height: 8),
+          ],
           Row(
             children: [
               Text(
-                _isHourly ? (paid ? 'Amount paid' : 'Amount due') : 'Charge',
+                _isHourly
+                    ? (paid
+                        ? 'Amount paid'
+                        : (_session.coveredByBookingFee
+                            ? 'Amount due'
+                            : 'Amount due'))
+                    : 'Charge',
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
@@ -384,7 +407,9 @@ class _ExitReceiptSheetState extends ConsumerState<_ExitReceiptSheet> {
               const Spacer(),
               Text(
                 _isHourly
-                    ? Formatters.currency(_amount / 100, decimals: false)
+                    ? (_session.coveredByBookingFee && !paid
+                        ? '₹0 · Covered by booking fee'
+                        : Formatters.currency(_amount / 100, decimals: false))
                     : '₹0',
                 style: theme.textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
@@ -393,6 +418,15 @@ class _ExitReceiptSheetState extends ConsumerState<_ExitReceiptSheet> {
               ),
             ],
           ),
+          if (_session.coveredByBookingFee && !paid) ...[
+            const SizedBox(height: 8),
+            Text(
+              'No further payment due. Booking fee is non-refundable.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ],
           if (_error != null) ...[
             const SizedBox(height: 14),
             Container(

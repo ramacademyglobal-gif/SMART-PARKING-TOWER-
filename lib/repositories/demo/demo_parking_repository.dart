@@ -6,6 +6,7 @@ import 'package:multiparking_tower/models/notification_model.dart';
 import 'package:multiparking_tower/models/parking_history_model.dart';
 import 'package:multiparking_tower/models/parking_slot_model.dart';
 import 'package:multiparking_tower/models/payment_model.dart';
+import 'package:multiparking_tower/models/qr_code_model.dart';
 import 'package:multiparking_tower/models/subscription_plan_model.dart';
 import 'package:multiparking_tower/repositories/demo/demo_data_store.dart';
 import 'package:multiparking_tower/repositories/parking_repository.dart';
@@ -348,5 +349,50 @@ class DemoParkingRepository implements ParkingRepository {
       ),
     );
     return paid;
+  }
+
+  @override
+  Future<Map<String, dynamic>> createBookingFeeOrder() async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final suffix = DateTime.now().millisecondsSinceEpoch;
+    return {
+      'orderId': 'order_booking_$suffix',
+      'amount': 5000,
+      'currency': 'INR',
+      'key': 'rzp_test_demo',
+    };
+  }
+
+  @override
+  Future<QrCodeModel> verifyBookingFeePayment({
+    required String orderId,
+    required String paymentId,
+    required String signature,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    if (_store.currentUser == null) {
+      throw const ServerException(message: 'Not authenticated');
+    }
+    if (_store.currentSlot == null) {
+      _store.allocateForPlan(SubscriptionPlanType.hourly);
+    }
+    final qr = _store.rebuildQr(
+      isPermanent: false,
+      validity: const Duration(hours: 2),
+    );
+    _store.payments.insert(
+      0,
+      PaymentModel(
+        id: _store.newId('pay'),
+        amountInPaise: 5000,
+        currency: 'INR',
+        planType: SubscriptionPlanType.hourly,
+        status: PaymentStatus.success,
+        createdAt: DateTime.now(),
+        razorpayOrderId: orderId,
+        razorpayPaymentId: paymentId,
+      ),
+    );
+    return qr;
   }
 }

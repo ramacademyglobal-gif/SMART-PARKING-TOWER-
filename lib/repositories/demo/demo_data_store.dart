@@ -261,7 +261,8 @@ class DemoDataStore {
         isOccupied: false,
       );
     } else {
-      final floor = 1 + _random.nextInt(11);
+      // Hourly: never floors 1–2 (reserved for subscribers).
+      final floor = 3 + _random.nextInt(9);
       final zones = ['B', 'C', 'D', 'E'];
       final zone = zones[_random.nextInt(zones.length)];
       final num = 1 + _random.nextInt(20);

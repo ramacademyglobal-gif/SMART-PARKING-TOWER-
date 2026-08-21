@@ -31,6 +31,9 @@ class ParkingHistoryModel extends Equatable {
     this.amountInPaise,
     this.billingType = 'hourly',
     this.paymentStatus = 'free',
+    this.bookingFeePaise = 0,
+    this.bookingFeePaid = false,
+    this.grossAmountInPaise,
   });
 
   final String id;
@@ -49,12 +52,20 @@ class ParkingHistoryModel extends Equatable {
 
   /// free | pending | paid
   final String paymentStatus;
+  final int bookingFeePaise;
+  final bool bookingFeePaid;
+  final int? grossAmountInPaise;
 
   String get slotLabel =>
       'Tower $tower · Floor $floor · Zone $zone · Slot $slotNumber';
 
   double? get amountInRupees =>
       amountInPaise == null ? null : amountInPaise! / 100.0;
+
+  double get bookingFeeRupees => bookingFeePaise / 100.0;
+
+  double? get grossAmountRupees =>
+      grossAmountInPaise == null ? null : grossAmountInPaise! / 100.0;
 
   bool get isHourly => billingType == 'hourly' || subscriptionType == SubscriptionPlanType.hourly;
 
@@ -63,6 +74,13 @@ class ParkingHistoryModel extends Equatable {
   /// True when an hourly charge is still owed for this (completed) session.
   bool get needsPayment =>
       paymentStatus == 'pending' && (amountInPaise ?? 0) > 0;
+
+  bool get coveredByBookingFee =>
+      isHourly &&
+      bookingFeePaid &&
+      bookingFeePaise > 0 &&
+      (amountInPaise ?? 0) <= 0 &&
+      status == ParkingHistoryStatus.completed;
 
   factory ParkingHistoryModel.fromJson(Map<String, dynamic> json) {
     final durationSeconds = json['durationSeconds'] as int? ??
@@ -107,6 +125,14 @@ class ParkingHistoryModel extends Equatable {
       paymentStatus: json['paymentStatus'] as String? ??
           json['payment_status'] as String? ??
           'free',
+      bookingFeePaise: json['bookingFeePaise'] as int? ??
+          json['booking_fee_paise'] as int? ??
+          0,
+      bookingFeePaid: json['bookingFeePaid'] as bool? ??
+          json['booking_fee_paid'] as bool? ??
+          false,
+      grossAmountInPaise: json['grossAmountInPaise'] as int? ??
+          json['gross_amount_in_paise'] as int?,
     );
   }
 
@@ -126,6 +152,9 @@ class ParkingHistoryModel extends Equatable {
       'amountInPaise': amountInPaise,
       'billingType': billingType,
       'paymentStatus': paymentStatus,
+      'bookingFeePaise': bookingFeePaise,
+      'bookingFeePaid': bookingFeePaid,
+      'grossAmountInPaise': grossAmountInPaise,
     };
   }
 
@@ -144,6 +173,9 @@ class ParkingHistoryModel extends Equatable {
     int? amountInPaise,
     String? billingType,
     String? paymentStatus,
+    int? bookingFeePaise,
+    bool? bookingFeePaid,
+    int? grossAmountInPaise,
     bool clearExitAt = false,
     bool clearDuration = false,
     bool clearAmount = false,
@@ -163,6 +195,9 @@ class ParkingHistoryModel extends Equatable {
       amountInPaise: clearAmount ? null : (amountInPaise ?? this.amountInPaise),
       billingType: billingType ?? this.billingType,
       paymentStatus: paymentStatus ?? this.paymentStatus,
+      bookingFeePaise: bookingFeePaise ?? this.bookingFeePaise,
+      bookingFeePaid: bookingFeePaid ?? this.bookingFeePaid,
+      grossAmountInPaise: grossAmountInPaise ?? this.grossAmountInPaise,
     );
   }
 
@@ -182,5 +217,8 @@ class ParkingHistoryModel extends Equatable {
         amountInPaise,
         billingType,
         paymentStatus,
+        bookingFeePaise,
+        bookingFeePaid,
+        grossAmountInPaise,
       ];
 }

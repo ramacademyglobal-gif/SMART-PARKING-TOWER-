@@ -8,7 +8,9 @@ import 'package:multiparking_tower/core/widgets/empty_state.dart';
 import 'package:multiparking_tower/core/widgets/premium_button.dart';
 import 'package:multiparking_tower/core/widgets/premium_card.dart';
 import 'package:multiparking_tower/core/widgets/tower_loading.dart';
+import 'package:multiparking_tower/features/parking/presentation/widgets/booking_fee_sheet.dart';
 import 'package:multiparking_tower/features/qr/presentation/providers/qr_provider.dart';
+import 'package:multiparking_tower/features/subscription/presentation/providers/subscription_provider.dart';
 import 'package:multiparking_tower/features/vehicle/presentation/providers/vehicle_provider.dart';
 import 'package:multiparking_tower/features/vehicle/presentation/widgets/vehicle_form.dart';
 import 'package:multiparking_tower/models/vehicle_model.dart';
@@ -52,8 +54,13 @@ class _VehicleOnboardingScreenState
       if (!mounted) return;
       // Mark this vehicle confirmed for the session so routing lets us through.
       ref.read(vehicleSessionConfirmedProvider.notifier).state = true;
-      // Mint / refresh the visit QR for this booking.
-      await ref.read(qrControllerProvider.notifier).refreshQr();
+      // Subscribers get a free permanent QR; hourly users pay booking fee first.
+      if (ref.read(hasActiveSubscriptionProvider)) {
+        await ref.read(qrControllerProvider.notifier).refreshQr();
+      } else {
+        final issued = await showBookingFeeCheckout(context);
+        if (issued == null) return;
+      }
       if (!mounted) return;
       await ref.read(onboardingProvider.notifier).refresh();
       if (!mounted) return;

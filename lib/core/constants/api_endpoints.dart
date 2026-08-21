@@ -37,6 +37,8 @@ class ApiEndpoints {
   static const String paymentHistory = '/payments';
   static const String createParkingOrder = '/payments/parking/create-order';
   static const String verifyParkingPayment = '/payments/parking/verify';
+  static const String createBookingFeeOrder = '/payments/booking/create-order';
+  static const String verifyBookingFeePayment = '/payments/booking/verify';
 
   // --- Parking ---
   static const String parkingSlot = '/parking/slot';
