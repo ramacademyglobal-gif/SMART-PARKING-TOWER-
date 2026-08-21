@@ -195,6 +195,12 @@ class ParkingHistory(Base):
     billing_type: Mapped[str] = mapped_column(String(20), default="hourly")
     # free | pending | paid — hourly exits with a charge start as "pending".
     payment_status: Mapped[str] = mapped_column(String(20), default="free")
+    # Non-refundable hourly booking fee paid before QR issuance (0 for walk-ins / subscribers).
+    booking_fee_paise: Mapped[int] = mapped_column(Integer, default=0)
+    booking_fee_paid: Mapped[bool] = mapped_column(Boolean, default=False)
+    booking_fee_payment_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    # Full hourly charge before booking-fee credit; amount_in_paise is the net due.
+    gross_amount_in_paise: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     is_walk_in: Mapped[bool] = mapped_column(Boolean, default=False)
     driver_name: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
@@ -226,6 +232,10 @@ class QrAccess(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Hourly booking fee attached to this temporary pass (subscribers leave these at 0/false).
+    booking_fee_paise: Mapped[int] = mapped_column(Integer, default=0)
+    booking_fee_paid: Mapped[bool] = mapped_column(Boolean, default=False)
+    booking_fee_payment_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
 
 class AppNotification(Base):

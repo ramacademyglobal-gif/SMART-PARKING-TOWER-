@@ -20,14 +20,13 @@ from app.schemas.common import (
     ParkingSlotOut,
     TowerCapacityOut,
 )
+from app.services.billing import apply_booking_fee_credit, calculate_hourly_charge_paise
+from app.services.gate import process_gate_scan
 from app.services.allocation import (
     allocate_slot_for_user,
     get_active_subscription,
     issue_qr_for_user,
 )
-from app.services.billing import calculate_hourly_charge_paise
-from app.services.gate import process_gate_scan
-
 router = APIRouter(prefix="/parking", tags=["parking"])
 
 
@@ -114,6 +113,20 @@ async def allocate(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ParkingSlotOut:
+    """Allocate a bay.
+
+    Hourly users must complete the booking-fee payment first (which also issues
+    the QR). Subscribers may allocate freely.
+    """
+    sub = await get_active_subscription(db, user.id)
+    from app.services.allocation import has_active_plan, current_qr
+
+    if not has_active_plan(sub):
+        access = await current_qr(db, user)
+        if access is None or not bool(getattr(access, "booking_fee_paid", False)):
+            raise AppError(
+                "Pay the non-refundable booking fee before a slot is allotted."
+            )
     slot = await allocate_slot_for_user(db, user)
     return ParkingSlotOut.model_validate(slot)
 
@@ -255,9 +268,15 @@ async def simulate_exit(
 
     amount_paise = 0
     if billing_type == "hourly" or sub is None:
-        amount_paise = calculate_hourly_charge_paise(duration_seconds)
+        gross = calculate_hourly_charge_paise(duration_seconds)
+        gross, amount_paise = apply_booking_fee_credit(
+            gross_paise=gross,
+            booking_fee_paise=int(getattr(session, "booking_fee_paise", 0) or 0),
+            booking_fee_paid=bool(getattr(session, "booking_fee_paid", False)),
+        )
         session.billing_type = "hourly"
         session.subscription_type = "hourly"
+        session.gross_amount_in_paise = gross
     else:
         session.billing_type = billing_type
         session.subscription_type = billing_type

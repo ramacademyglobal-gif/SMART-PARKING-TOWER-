@@ -42,6 +42,8 @@ class PublicConfigOut(CamelModel):
     premium_slots: int = 220
     standard_slots: int = 880
     hourly_rate_rupees: float = 50.0
+    booking_fee_rupees: float = 50.0
+    booking_fee_paise: int = 5000
 
 
 class TowerCapacityOut(CamelModel):
@@ -211,6 +213,9 @@ class ParkingHistoryOut(CamelModel):
     amount_in_paise: Optional[int] = None
     billing_type: str = "hourly"
     payment_status: str = "free"
+    booking_fee_paise: int = 0
+    booking_fee_paid: bool = False
+    gross_amount_in_paise: Optional[int] = None
 
 
 class QrOut(CamelModel):
@@ -221,6 +226,8 @@ class QrOut(CamelModel):
     subscription_type: str
     expires_at: datetime
     is_permanent: bool
+    booking_fee_paise: int = 0
+    booking_fee_paid: bool = False
 
 
 class NotificationOut(CamelModel):
@@ -279,6 +286,9 @@ class GateValidateOut(CamelModel):
     zone: Optional[str] = None
     slot_number: Optional[str] = None
     is_walk_in: bool = False
+    booking_fee_paise: Optional[int] = None
+    booking_fee_credit_paise: Optional[int] = None
+    gross_amount_in_paise: Optional[int] = None
 
 
 class WalkInIn(CamelModel):

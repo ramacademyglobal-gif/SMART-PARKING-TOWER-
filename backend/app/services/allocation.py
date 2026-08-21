@@ -5,10 +5,12 @@ from datetime import timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.exceptions import AppError, ConflictError
 from app.core.security import new_id, utcnow, as_utc
 from app.db.models import (
     ParkingSlot,
+    Payment,
     QrAccess,
     Subscription,
     User,
@@ -159,8 +161,54 @@ def slot_label(slot: ParkingSlot) -> str:
 QR_PASS_TTL = timedelta(hours=2)
 
 
-async def issue_qr_for_user(db: AsyncSession, user: User, *, rotate: bool = False) -> QrAccess:
+async def release_expired_hourly_holds(db: AsyncSession, *, user_id: str | None = None) -> int:
+    """Revoke expired unused hourly QRs and free soft-assigned bays.
+
+    The booking fee is never refunded — only the hold is released.
+    """
+    now = utcnow()
+    stmt = select(QrAccess).where(
+        QrAccess.revoked.is_(False),
+        QrAccess.is_permanent.is_(False),
+        QrAccess.expires_at <= now,
+    )
+    if user_id:
+        stmt = stmt.where(QrAccess.user_id == user_id)
+    rows = list(await db.scalars(stmt))
+    released = 0
+    for access in rows:
+        access.revoked = True
+        released += 1
+        if not access.parking_slot_id:
+            continue
+        slot = await db.get(ParkingSlot, access.parking_slot_id)
+        if slot is None:
+            continue
+        # Only free soft holds that never became a real parked session.
+        if not slot.is_occupied and slot.assigned_user_id == access.user_id:
+            slot.assigned_user_id = None
+    if released:
+        await db.commit()
+    return released
+
+
+async def issue_qr_for_user(
+    db: AsyncSession,
+    user: User,
+    *,
+    rotate: bool = False,
+    booking_payment: Payment | None = None,
+) -> QrAccess:
+    """Issue a QR pass.
+
+    Subscribers get a permanent QR with no booking fee.
+    Hourly users must supply a successful ``plan_type=booking`` payment, or already
+    hold an active fee-paid temporary pass (reuse / rotate of the same booking).
+    """
+    await release_expired_hourly_holds(db, user_id=user.id)
+    settings = get_settings()
     sub = await get_active_subscription(db, user.id)
+    is_permanent = has_active_plan(sub)
 
     vehicle = await db.scalar(
         select(Vehicle)
@@ -171,18 +219,45 @@ async def issue_qr_for_user(db: AsyncSession, user: User, *, rotate: bool = Fals
     if vehicle is None:
         raise AppError("Register a vehicle before generating QR")
 
+    booking_fee_paise = 0
+    booking_fee_paid = False
+    booking_fee_payment_id: str | None = None
+
+    if not is_permanent:
+        if (
+            booking_payment is not None
+            and booking_payment.user_id == user.id
+            and booking_payment.plan_type == "booking"
+            and booking_payment.status == "success"
+        ):
+            booking_fee_paise = booking_payment.amount_in_paise or settings.booking_fee_paise
+            booking_fee_paid = True
+            booking_fee_payment_id = booking_payment.id
+        else:
+            current = await current_qr(db, user)
+            if (
+                current is not None
+                and not current.is_permanent
+                and bool(getattr(current, "booking_fee_paid", False))
+            ):
+                # Reuse / rotate an already-paid temporary booking — no second fee.
+                booking_fee_paise = int(getattr(current, "booking_fee_paise", 0) or 0)
+                booking_fee_paid = True
+                booking_fee_payment_id = getattr(current, "booking_fee_payment_id", None)
+                if not rotate:
+                    return current
+            else:
+                raise AppError(
+                    "Pay the non-refundable booking fee before a slot is allotted "
+                    "and a temporary QR pass is issued."
+                )
+
     slot = await allocate_slot_for_user(db, user)
 
-    # Subscribers keep a permanent QR; hourly passes expire after 2 hours.
-    is_permanent = has_active_plan(sub)
-
-    if not rotate:
+    if not rotate and is_permanent:
         current = await current_qr(db, user)
-        if current is not None:
-            if is_permanent and current.is_permanent:
-                return current
-            if not is_permanent and not current.is_permanent:
-                return current
+        if current is not None and current.is_permanent:
+            return current
 
     existing = await db.scalars(
         select(QrAccess).where(
@@ -215,6 +290,9 @@ async def issue_qr_for_user(db: AsyncSession, user: User, *, rotate: bool = Fals
         token_cipher=token,
         is_permanent=is_permanent,
         expires_at=expires_at,
+        booking_fee_paise=booking_fee_paise if not is_permanent else 0,
+        booking_fee_paid=booking_fee_paid if not is_permanent else False,
+        booking_fee_payment_id=booking_fee_payment_id if not is_permanent else None,
     )
     db.add(access)
     await db.commit()
@@ -236,6 +314,7 @@ async def revoke_non_permanent_qr(db: AsyncSession, user_id: str) -> None:
 
 
 async def current_qr(db: AsyncSession, user: User) -> QrAccess | None:
+    await release_expired_hourly_holds(db, user_id=user.id)
     rows = await db.scalars(
         select(QrAccess)
         .where(

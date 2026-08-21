@@ -47,4 +47,6 @@ async def public_config(db: AsyncSession = Depends(get_db)) -> PublicConfigOut:
         premium_slots=PREMIUM_SLOTS,
         standard_slots=STANDARD_SLOTS,
         hourly_rate_rupees=settings.hourly_rate_paise / 100.0,
+        booking_fee_rupees=settings.booking_fee_paise / 100.0,
+        booking_fee_paise=settings.booking_fee_paise,
     )

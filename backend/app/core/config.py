@@ -139,6 +139,9 @@ class Settings(BaseSettings):
     gate_api_key: str = "dev-gate-key-change-me"
     # Pay-as-you-go rate for users without a subscription (₹50 / hour).
     hourly_rate_paise: int = 5000
+    # Non-refundable booking fee charged before hourly slot + QR issuance.
+    # Credited against the final exit charge; never refunded on cancel/unused.
+    booking_fee_paise: int = 5000
 
     # Gate-staff console account, provisioned on startup.
     staff_username: str = "staff"

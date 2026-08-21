@@ -13,7 +13,7 @@ from app.services.allocation import (
     revoke_non_permanent_qr,
     slot_label,
 )
-from app.services.billing import calculate_hourly_charge_paise, format_duration
+from app.services.billing import apply_booking_fee_credit, calculate_hourly_charge_paise, format_duration
 from app.services.notifications import push_notification
 from app.services.qr_crypto import open_qr_payload, token_hash
 
@@ -212,6 +212,9 @@ async def process_gate_scan(
             billing_type=billing_type,
             status="parked",
             created_by_staff_id=staff_id,
+            booking_fee_paise=int(getattr(access, "booking_fee_paise", 0) or 0),
+            booking_fee_paid=bool(getattr(access, "booking_fee_paid", False)),
+            booking_fee_payment_id=getattr(access, "booking_fee_payment_id", None),
         )
         db.add(history)
         await db.commit()
@@ -269,13 +272,23 @@ async def process_gate_scan(
         session.closed_by_staff_id = staff_id
 
         amount_paise = 0
+        gross_paise = 0
+        booking_fee = int(getattr(session, "booking_fee_paise", 0) or 0)
+        booking_paid = bool(getattr(session, "booking_fee_paid", False))
         if billing_type == "hourly" or sub is None:
-            amount_paise = calculate_hourly_charge_paise(duration_seconds)
+            gross_paise = calculate_hourly_charge_paise(duration_seconds)
+            gross_paise, amount_paise = apply_booking_fee_credit(
+                gross_paise=gross_paise,
+                booking_fee_paise=booking_fee,
+                booking_fee_paid=booking_paid,
+            )
             session.billing_type = "hourly"
             session.subscription_type = "hourly"
+            session.gross_amount_in_paise = gross_paise
         else:
             session.billing_type = billing_type
             session.subscription_type = billing_type
+            session.gross_amount_in_paise = 0
         session.amount_in_paise = amount_paise
         session.payment_status = "pending" if amount_paise > 0 else "free"
 
@@ -293,25 +306,48 @@ async def process_gate_scan(
 
         amount_rupees = amount_paise / 100.0
         duration_label = format_duration(duration_seconds)
+        fee_credit = booking_fee if booking_paid else 0
         if amount_paise > 0:
             message = (
                 f"EXIT · {vehicle.number_plate} · "
                 f"{duration_label} · ₹{amount_rupees:.0f} due"
             )
+            if fee_credit > 0:
+                message += f" (₹{fee_credit / 100:.0f} booking fee credited)"
             await push_notification(
                 db,
                 user_id=user.id,
                 title="Parking payment due",
                 body=(
                     f"{vehicle.number_plate} exited · {duration_label} · "
-                    f"₹{amount_rupees:.0f}. Pay now on Home."
+                    f"₹{amount_rupees:.0f} due after booking fee credit. Pay now on Home."
                 ),
                 type_="billing",
                 data={
                     "historyId": session.id,
                     "amountInPaise": amount_paise,
+                    "grossAmountInPaise": gross_paise,
+                    "bookingFeePaise": fee_credit,
                     "action": "pay_parking",
                 },
+            )
+        elif billing_type == "hourly" or sub is None:
+            message = (
+                f"EXIT · Covered by booking fee"
+                if fee_credit > 0
+                else f"EXIT · {vehicle.number_plate} · no charge"
+            )
+            await push_notification(
+                db,
+                user_id=user.id,
+                title="Exit complete",
+                body=(
+                    f"{vehicle.number_plate} exited · covered by booking fee."
+                    if fee_credit > 0
+                    else f"{vehicle.number_plate} exited · no charge."
+                ),
+                type_="parking",
+                data={"historyId": session.id, "action": "exit"},
             )
         else:
             message = f"EXIT · Covered by your {billing_type} plan"
@@ -347,6 +383,9 @@ async def process_gate_scan(
             floor=occupied_slot.floor,
             zone=occupied_slot.zone,
             slot_number=occupied_slot.slot_number,
+            booking_fee_paise=fee_credit,
+            booking_fee_credit_paise=fee_credit,
+            gross_amount_in_paise=gross_paise if gross_paise else None,
         )
 
     return GateValidateOut(

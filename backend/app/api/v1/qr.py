@@ -4,13 +4,14 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import AppError
 from app.db.models import ParkingSlot, User, Vehicle
 from app.db.session import get_db
 from app.schemas.common import QrOut
 from app.services.allocation import (
     current_qr,
     get_active_subscription,
+    has_active_plan,
     issue_qr_for_user,
     slot_label,
 )
@@ -30,6 +31,8 @@ async def _to_qr_out(db: AsyncSession, user: User, access) -> QrOut:
         subscription_type=sub.plan_type if sub else "hourly",
         expires_at=access.expires_at,
         is_permanent=access.is_permanent,
+        booking_fee_paise=int(getattr(access, "booking_fee_paise", 0) or 0),
+        booking_fee_paid=bool(getattr(access, "booking_fee_paid", False)),
     )
 
 
@@ -41,7 +44,8 @@ async def get_current(
     """Return the active pass only — never mint a new QR here.
 
     Hourly passes are revoked on exit, so this returns null until the member
-    explicitly books again (POST /qr/refresh). Permanent subscription QRs stay.
+    explicitly books again (POST /qr/refresh or booking-fee verify). Permanent
+    subscription QRs stay.
     """
     access = await current_qr(db, user)
     if access is None:
@@ -54,5 +58,18 @@ async def refresh(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> QrOut:
+    """Rotate / issue QR.
+
+    Subscribers: free permanent QR refresh.
+    Hourly: only allowed when an active fee-paid booking already exists; new
+    hourly bookings must go through POST /payments/booking/verify.
+    """
+    sub = await get_active_subscription(db, user.id)
+    if not has_active_plan(sub):
+        existing = await current_qr(db, user)
+        if existing is None or not bool(getattr(existing, "booking_fee_paid", False)):
+            raise AppError(
+                "Pay the non-refundable booking fee before booking a slot and QR pass."
+            )
     access = await issue_qr_for_user(db, user, rotate=True)
     return await _to_qr_out(db, user, access)

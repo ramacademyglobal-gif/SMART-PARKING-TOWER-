@@ -47,6 +47,9 @@ async def lifespan(_: FastAPI):
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+        from app.db.schema_patches import ensure_schema_patches
+
+        await ensure_schema_patches(engine)
     except Exception as exc:  # noqa: BLE001 — convert to an actionable startup error
         if not settings.is_sqlite:
             raise RuntimeError(describe_db_connect_error(settings.database_url, exc)) from exc
@@ -56,6 +59,9 @@ async def lifespan(_: FastAPI):
         # Reseeds when empty or slot count ≠ 1100 (Tower A, 11×100).
         await seed_reference_data(session)
         await seed_staff_accounts(session)
+        from app.services.allocation import release_expired_hourly_holds
+
+        await release_expired_hourly_holds(session)
 
     try:
         from app.services.firebase_auth import warm_firebase_certs

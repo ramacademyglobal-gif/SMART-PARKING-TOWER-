@@ -129,3 +129,59 @@ async def settle_parking_payment(
     )
     await db.refresh(session)
     return session
+
+
+async def settle_booking_payment(
+    db: AsyncSession,
+    *,
+    payment: Payment,
+    payment_id: str,
+    signature: str | None = None,
+):
+    """Mark the non-refundable booking fee paid, then allot a slot + issue QR."""
+    from app.db.models import QrAccess
+
+    user = await db.get(User, payment.user_id)
+    if user is None:
+        raise NotFoundError("User not found")
+
+    if payment.plan_type != "booking":
+        raise AppError("Not a booking-fee payment")
+
+    if payment.status != "success":
+        _mark_paid(payment, payment_id=payment_id, signature=signature)
+        await db.commit()
+        await db.refresh(payment)
+
+    # Idempotent: if this payment already minted a QR, return it.
+    existing = await db.scalar(
+        select(QrAccess)
+        .where(
+            QrAccess.user_id == user.id,
+            QrAccess.booking_fee_payment_id == payment.id,
+            QrAccess.revoked.is_(False),
+        )
+        .order_by(QrAccess.created_at.desc())
+        .limit(1)
+    )
+    if existing is not None:
+        return existing
+
+    access = await issue_qr_for_user(
+        db,
+        user,
+        rotate=True,
+        booking_payment=payment,
+    )
+    await push_notification(
+        db,
+        user_id=user.id,
+        title="Booking confirmed",
+        body=(
+            f"Non-refundable booking fee of ₹{payment.amount_in_paise / 100:.0f} paid. "
+            "Your bay is reserved and your QR pass is ready."
+        ),
+        type_="payment",
+        data={"paymentId": payment.id, "type": "booking"},
+    )
+    return access

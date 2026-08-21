@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_current_user
 from app.core.exceptions import AppError, NotFoundError, UnauthorizedError
 from app.core.security import new_id, utcnow
-from app.db.models import Payment, ParkingHistory, Plan, User
+from app.db.models import Payment, ParkingHistory, ParkingSlot, Plan, User, Vehicle
 from app.db.session import get_db
 from app.schemas.common import (
     CreateOrderIn,
@@ -21,14 +21,21 @@ from app.schemas.common import (
     ParkingVerifyIn,
     PaymentOut,
     PlanOut,
+    QrOut,
     SubscriptionOut,
     VerifyPaymentIn,
 )
-from app.services.allocation import get_active_subscription
+from app.services.allocation import (
+    get_active_subscription,
+    has_active_plan,
+    slot_label,
+)
 from app.services.payments import (
+    settle_booking_payment,
     settle_parking_payment,
     settle_subscription_payment,
 )
+from app.core.config import get_settings
 from app.services.razorpay_service import (
     create_razorpay_order,
     verify_razorpay_signature,
@@ -228,6 +235,92 @@ async def verify_parking_payment(
     return ParkingHistoryOut.model_validate(settled)
 
 
+async def _qr_out_for_access(db: AsyncSession, user: User, access) -> QrOut:
+    sub = await get_active_subscription(db, user.id)
+    slot = await db.get(ParkingSlot, access.parking_slot_id) if access.parking_slot_id else None
+    vehicle = await db.get(Vehicle, access.vehicle_id) if access.vehicle_id else None
+    return QrOut(
+        token=access.token_cipher,
+        user_name=user.display_name,
+        vehicle_number=vehicle.number_plate if vehicle else "",
+        slot_label=slot_label(slot) if slot else "Unassigned",
+        subscription_type=sub.plan_type if sub else "hourly",
+        expires_at=access.expires_at,
+        is_permanent=access.is_permanent,
+        booking_fee_paise=int(getattr(access, "booking_fee_paise", 0) or 0),
+        booking_fee_paid=bool(getattr(access, "booking_fee_paid", False)),
+    )
+
+
+@payments_router.post("/booking/create-order", response_model=CreateOrderOut)
+async def create_booking_fee_order(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CreateOrderOut:
+    """Create a Razorpay order for the non-refundable hourly booking fee."""
+    sub = await get_active_subscription(db, user.id)
+    if has_active_plan(sub):
+        raise AppError("Subscribers do not pay a booking fee. Refresh your QR instead.")
+
+    settings = get_settings()
+    amount = settings.booking_fee_paise
+    if amount <= 0:
+        raise AppError("Booking fee is not configured")
+
+    order = await create_razorpay_order(
+        amount_paise=amount,
+        receipt=f"book_{user.id[-8:]}",
+        notes={"userId": user.id, "type": "booking"},
+    )
+    payment = Payment(
+        id=new_id("pay"),
+        user_id=user.id,
+        amount_in_paise=amount,
+        currency="INR",
+        plan_type="booking",
+        status="created",
+        razorpay_order_id=order["id"],
+        created_at=utcnow(),
+    )
+    db.add(payment)
+    await db.commit()
+    return CreateOrderOut(
+        order_id=order["id"],
+        amount=order["amount"],
+        currency=order.get("currency", "INR"),
+        key=order["key"],
+    )
+
+
+@payments_router.post("/booking/verify", response_model=QrOut)
+async def verify_booking_fee_payment(
+    body: VerifyPaymentIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> QrOut:
+    """Verify booking-fee payment, then allot a slot and issue the temporary QR."""
+    if not verify_razorpay_signature(body.order_id, body.payment_id, body.signature):
+        raise AppError("Payment signature verification failed")
+
+    payment = await db.scalar(
+        select(Payment).where(
+            Payment.user_id == user.id,
+            Payment.razorpay_order_id == body.order_id,
+            Payment.plan_type == "booking",
+        )
+    )
+    if payment is None:
+        raise NotFoundError("Booking payment order not found")
+
+    access = await settle_booking_payment(
+        db,
+        payment=payment,
+        payment_id=body.payment_id,
+        signature=body.signature,
+    )
+    return await _qr_out_for_access(db, user, access)
+
+
 # Events that mean money has actually been captured.
 _SETTLING_EVENTS = {"payment.captured", "order.paid"}
 
@@ -277,6 +370,10 @@ async def razorpay_webhook(
         # Orders created outside this app (or already pruned) are not an error.
         logger.info("Razorpay webhook for unknown order %s", order_id)
         return MessageOut(message="Unknown order ignored")
+
+    if payment.plan_type == "booking" or notes.get("type") == "booking":
+        await settle_booking_payment(db, payment=payment, payment_id=payment_id)
+        return MessageOut(message="Booking fee settled")
 
     history_id = notes.get("historyId")
     if history_id:
