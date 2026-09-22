@@ -47,7 +47,7 @@ class ApiStaffRepository implements StaffRepository {
         queryParameters: {
           if (search != null && search.trim().isNotEmpty) 'search': search,
           'status': status,
-          if (floor != null) 'floor': floor,
+          'floor': ?floor,
         },
       );
       final data = response.data;
