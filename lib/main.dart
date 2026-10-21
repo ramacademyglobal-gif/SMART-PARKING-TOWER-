@@ -1,10 +1,10 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:multiparking_tower/app.dart';
 import 'package:multiparking_tower/core/config/app_config.dart';
 import 'package:multiparking_tower/core/providers/core_providers.dart';
 import 'package:multiparking_tower/core/services/local_storage_service.dart';
+import 'package:multiparking_tower/features/hub/presentation/hub_app.dart';
 import 'package:multiparking_tower/firebase_options.dart';
 
 Future<void> main() async {
@@ -16,6 +16,7 @@ Future<void> main() async {
   final config = AppConfig.fromEnvironment();
 
   // Production member OTP uses Firebase Phone Auth. Demo stays offline.
+  // Open Space may reuse this Firebase app when that service is selected.
   final shouldInitFirebase = config.isProduction || config.enableFirebase;
   if (shouldInitFirebase) {
     try {
@@ -40,7 +41,7 @@ Future<void> main() async {
         localStorageProvider.overrideWithValue(localStorage),
         appConfigProvider.overrideWithValue(config),
       ],
-      child: const MultiParkingApp(),
+      child: const HubApp(),
     ),
   );
 }

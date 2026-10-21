@@ -1,6 +1,28 @@
-# MultiParking Tower
+# MultiParking (One App, Two Services)
 
-Premium Flutter mobile app for an automated multi-level car parking tower.
+Single Flutter APK with a **service chooser**:
+
+1. **Multi-Level Tower Parking** — automated tower (this repo’s FastAPI backend)
+2. **Open Space Parking** — land/marketplace parking (`packages/open_space_parking` → Node API)
+
+Flow: open app → choose service → log in for that service only. Use **Change service** to return to the chooser.
+
+```bash
+# Hub (demo Tower offline; Open Space needs Node on :3000)
+flutter run -d chrome --dart-define=APP_MODE=demo
+
+# Hub with both APIs
+flutter run -d chrome \
+  --dart-define=APP_MODE=production \
+  --dart-define=API_BASE_URL=http://127.0.0.1:8000/v1 \
+  --dart-define=OPEN_SPACE_API_BASE_URL=http://127.0.0.1:3000
+```
+
+---
+
+## Multi-Level Tower Parking
+
+Premium Flutter module for an automated multi-level car parking tower.
 
 Users authenticate with phone OTP (**Firebase Phone Auth**), optionally purchase Monthly or Annual subscriptions via Razorpay (or pay ₹50/hour on exit), register vehicles, receive automatic slot allocation, and access the tower with a secure opaque QR token.
 

@@ -97,6 +97,16 @@ class LocalStorageService {
   Future<void> setNotificationsEnabled(bool enabled) =>
       _requirePrefs.setBool(StorageKeys.notificationsEnabled, enabled);
 
+  // --- Hub service mode (tower | open_space) ---
+  String? getParkingServiceMode() =>
+      _requirePrefs.getString(StorageKeys.parkingServiceMode);
+
+  Future<void> setParkingServiceMode(String mode) =>
+      _requirePrefs.setString(StorageKeys.parkingServiceMode, mode);
+
+  Future<void> clearParkingServiceMode() =>
+      _requirePrefs.remove(StorageKeys.parkingServiceMode);
+
   /// Clears all stored preferences.
   Future<void> clear() => _requirePrefs.clear();
 }

@@ -1,0 +1,46 @@
+import 'package:mongo_dart/mongo_dart.dart';
+
+import 'package:open_space_parking/core/common/exceptions/network_exception.dart';
+import 'package:open_space_parking/core/config/environment_config.dart';
+import 'package:open_space_parking/core/services/api/api_client.dart';
+import 'package:open_space_parking/core/services/mongodb/mongo_database_service.dart';
+
+/// HTTP data layer — Flutter talks to the Node API (Supabase Postgres).
+/// Never opens a MongoDB socket.
+class HttpMongoDatabaseService implements MongoDatabaseService {
+  HttpMongoDatabaseService(this._apiClient);
+
+  final ApiClient _apiClient;
+  bool _connected = false;
+
+  @override
+  bool get isConnected => _connected;
+
+  @override
+  Future<void> connect() async {
+    if (_connected) return;
+    try {
+      await _apiClient.checkHealth();
+      _connected = true;
+    } catch (e) {
+      _connected = false;
+      if (e is NetworkException) rethrow;
+      throw NetworkException(
+        'Unable to connect to API server: $e. '
+        '${EnvironmentConfig.phoneUnreachableMessage}',
+      );
+    }
+  }
+
+  @override
+  Future<void> disconnect() async {
+    _connected = false;
+  }
+
+  @override
+  DbCollection collection(String name) {
+    throw UnsupportedError(
+      'Direct collection access is unavailable on web. Use HttpMongoCollectionService.',
+    );
+  }
+}

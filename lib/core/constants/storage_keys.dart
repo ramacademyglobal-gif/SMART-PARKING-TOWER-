@@ -20,4 +20,5 @@ class StorageKeys {
   static const String lastSyncedAt = 'pref_last_synced_at';
   static const String biometricEnabled = 'pref_biometric_enabled';
   static const String notificationsEnabled = 'pref_notifications_enabled';
+  static const String parkingServiceMode = 'pref_parking_service_mode';
 }
